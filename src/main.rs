@@ -17,7 +17,8 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:6379").await?;
 
     loop {
-        let (mut socket, _) = listener.accept().await?;
+        let (mut socket, addr) = listener.accept().await?;
+        eprintln!("accepted client @ {addr}");
         handle_client(&mut socket).await?;
     }
 }
