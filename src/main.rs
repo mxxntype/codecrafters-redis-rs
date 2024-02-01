@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
         match stream {
             Ok(mut stream) => {
                 println!("accepted new connection");
-                handle_client(&mut stream)?;
+                std::thread::spawn(move || handle_client(&mut stream).unwrap());
             }
             Err(e) => println!("error accepting connection: {}", e),
         }
