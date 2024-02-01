@@ -16,10 +16,11 @@ const PONG_RESPONSE: &[u8] = b"+PONG\r\n";
 async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:6379").await?;
 
+    let mut threads = vec![];
     loop {
-        let (mut socket, addr) = listener.accept().await?;
-        eprintln!("accepted client @ {addr}");
-        handle_client(&mut socket).await?;
+        let (mut socket, _) = listener.accept().await?;
+        let thread = tokio::spawn(async move { handle_client(&mut socket).await.unwrap() });
+        threads.push(thread);
     }
 }
 
