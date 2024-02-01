@@ -4,18 +4,12 @@
 //! REdis Serialization Protocol (RESP). While the protocol was designed specifically
 //! for Redis, you can use it for other client-server software projects.
 
-pub const SEPARATOR: &str = "\r\n";
+use std::io::Error;
 
-#[derive(thiserror::Error, Debug)]
-pub enum ParseError {
-    #[allow(clippy::enum_variant_names)]
-    #[error("Error parsing number in RESP")]
-    ParseError(#[from] std::num::ParseIntError),
-    #[error("Unexpected EOF while parsing RESP")]
-    UnexpectedEOF,
-    #[error("Unknown RESP parse error")]
-    Unknown,
-}
+pub const SEPARATOR: &str = "\r\n";
+pub const SIMPLE_STRING_START: char = '+';
+pub const BULK_STRING_START: char = '$';
+pub const ARRAY_START: char = '*';
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
@@ -59,50 +53,46 @@ pub enum Token {
     /// Example:
     ///
     /// `*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n`
-    Array { elements: Vec<Token> },
+    Array { tokens: Vec<Token> },
 }
 
 impl TryFrom<&str> for Token {
-    type Error = ParseError;
+    type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let err = Error::new(std::io::ErrorKind::InvalidInput, "Invalid RESP expression");
         let mut substrings = value[1..].split(SEPARATOR);
         match value.chars().next() {
-            Some('+') => Ok(Self::SimpleString {
-                data: substrings
-                    .nth(0)
-                    .ok_or(ParseError::UnexpectedEOF)?
-                    .to_owned(),
+            Some(SIMPLE_STRING_START) => Ok(Self::SimpleString {
+                data: substrings.nth(0).ok_or(err)?.to_owned(),
             }),
-            Some('$') => Ok(Self::BulkString {
-                data: substrings
-                    .nth(1)
-                    .ok_or(ParseError::UnexpectedEOF)?
-                    .to_owned(),
+            Some(BULK_STRING_START) => Ok(Self::BulkString {
+                data: substrings.nth(1).ok_or(err)?.to_owned(),
             }),
-            Some('*') => {
+            Some(ARRAY_START) => {
                 let element_count = substrings
                     .next()
-                    .ok_or(ParseError::UnexpectedEOF)?
-                    .parse::<usize>()?;
+                    .ok_or(err)?
+                    .parse::<usize>()
+                    .map_err(|_| Error::new(std::io::ErrorKind::InvalidInput, "Invalid length"))?;
                 let mut vec = Vec::with_capacity(element_count);
 
                 // TODO: Refactor.
                 for str in substrings.filter(|str| !str.is_empty()) {
                     match str.chars().next() {
-                        Some('+') => vec.push(Self::SimpleString {
+                        Some(SIMPLE_STRING_START) => vec.push(Self::SimpleString {
                             data: str[1..].to_owned(),
                         }),
-                        Some('$') => continue,
+                        Some(BULK_STRING_START) => continue,
                         Some(_) => vec.push(Self::BulkString {
                             data: str.to_owned(),
                         }),
                         _ => {}
                     }
                 }
-                Ok(Self::Array { elements: vec })
+                Ok(Self::Array { tokens: vec })
             }
-            _ => Err(ParseError::Unknown),
+            _ => Err(err),
         }
     }
 }
@@ -154,7 +144,7 @@ mod tests {
         assert_eq!(
             array,
             Token::Array {
-                elements: vec![
+                tokens: vec![
                     Token::BulkString {
                         data: String::from("ECHO")
                     },
@@ -173,7 +163,7 @@ mod tests {
         assert_eq!(
             array,
             Token::Array {
-                elements: vec![
+                tokens: vec![
                     Token::BulkString {
                         data: String::from("ECHO")
                     },

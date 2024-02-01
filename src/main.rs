@@ -5,29 +5,31 @@
 //! **Note**: If you're viewing this repo on GitHub, head over to
 //! [codecrafters.io](https://codecrafters.io) to try the challenge.
 
+mod command;
 mod resp;
 
+use command::{Command, PONG_RESPONSE};
+use resp::{SEPARATOR, SIMPLE_STRING_START};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
 
-const PONG_RESPONSE: &[u8] = b"+PONG\r\n";
+const LISTEN_ADDR: &str = "127.0.0.1:6379";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:6379").await?;
-
+    let listener = TcpListener::bind(LISTEN_ADDR).await?;
     let mut threads = vec![];
     loop {
         let (mut socket, _) = listener.accept().await?;
-        let thread = tokio::spawn(async move { handle_client(&mut socket).await.unwrap() });
+        let thread = tokio::spawn(async move { _ = handle_client(&mut socket).await });
         threads.push(thread);
     }
 }
 
 async fn handle_client(stream: &mut TcpStream) -> anyhow::Result<()> {
-    let mut request = [0u8; 32];
+    let mut request = [0; 512];
 
     // `stream.read()` reads until a newline, so lets
     // run it in a loop to read everything line-by-line.
@@ -39,7 +41,17 @@ async fn handle_client(stream: &mut TcpStream) -> anyhow::Result<()> {
         }
 
         // If we actually read something meaningful, respond to it.
-        _ = stream.write(PONG_RESPONSE).await?;
+        let syntax = String::from_utf8(request.to_vec())?;
+        let command = Command::try_from(syntax.as_str())?;
+        _ = match command {
+            Command::Ping => stream.write(PONG_RESPONSE.as_bytes()).await,
+            Command::Echo { message } => {
+                stream
+                    .write(format!("{SIMPLE_STRING_START}{message}{SEPARATOR}").as_bytes())
+                    .await
+            }
+        }
+        .unwrap()
     }
 
     Ok(())
