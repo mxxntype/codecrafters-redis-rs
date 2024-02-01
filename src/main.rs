@@ -5,6 +5,8 @@
 //! **Note**: If you're viewing this repo on GitHub, head over to
 //! [codecrafters.io](https://codecrafters.io) to try the challenge.
 
+mod resp;
+
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
