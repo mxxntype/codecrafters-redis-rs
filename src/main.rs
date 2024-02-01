@@ -28,12 +28,21 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-// FIXME: Handles a single request like "ping\nping\nping" fine,
-// but any following requests hang?..
 fn handle_client(stream: &mut TcpStream) -> anyhow::Result<()> {
-    let mut buf = [0u8; 20];
-    while let Ok(_read_bytes) = stream.read(&mut buf) {
-        _ = stream.write(PONG_RESPONSE);
+    let mut request = [0u8; 32];
+
+    // `stream.read()` reads until a newline, so lets
+    // run it in a loop to read everything line-by-line.
+    while let Ok(read_bytes) = stream.read(&mut request) {
+        // Having nothing to read is not an error, it's an Ok(0).
+        // Without this, the loop will run until an error occurs.
+        if read_bytes == 0 {
+            break;
+        }
+
+        // If we actually read something meaningful, respond to it.
+        _ = stream.write(PONG_RESPONSE)?;
     }
+
     Ok(())
 }
