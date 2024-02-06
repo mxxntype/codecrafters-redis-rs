@@ -1,7 +1,7 @@
 //! # Command interpretation and handling.
 
 use crate::{
-    resp::{Token, SEPARATOR, SIMPLE_STRING_START},
+    resp::{Token, CRLF, SIMPLE_STRING_START},
     Value,
 };
 use const_format::concatcp;
@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub(crate) const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", SEPARATOR);
+pub(crate) const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", CRLF);
 
 /// Known commads that the server can respond to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,7 +77,6 @@ impl TryFrom<Token> for Command {
                                 ),
                                 ttl,
                             ) => {
-                                dbg!(ttl);
                                 let ttl = match ttl {
                                     Some(
                                         Token::SimpleString { data: ttl }
@@ -93,7 +92,6 @@ impl TryFrom<Token> for Command {
                                     ttl,
                                     created: Instant::now(),
                                 };
-                                dbg!(&value);
                                 let command = Self::Set {
                                     key: key.to_string(),
                                     value,

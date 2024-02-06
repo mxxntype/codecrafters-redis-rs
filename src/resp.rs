@@ -6,7 +6,7 @@
 
 use std::io::Error;
 
-pub const SEPARATOR: &str = "\r\n";
+pub const CRLF: &str = "\r\n";
 pub const SIMPLE_STRING_START: char = '+';
 pub const BULK_STRING_START: char = '$';
 pub const ARRAY_START: char = '*';
@@ -62,7 +62,7 @@ impl TryFrom<&str> for Token {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let value = value.replace('\0', "");
         let err = Error::new(std::io::ErrorKind::InvalidInput, "Invalid RESP expression");
-        let mut substrings = value[1..].split(SEPARATOR);
+        let mut substrings = value[1..].split(CRLF);
         match value.chars().next() {
             Some(SIMPLE_STRING_START) => Ok(Self::SimpleString {
                 data: substrings.nth(0).ok_or(err)?.to_owned(),
