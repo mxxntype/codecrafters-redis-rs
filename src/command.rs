@@ -13,6 +13,17 @@ pub enum Command {
     Ping,
     /// The server should repeat the [`message`].
     Echo { message: String },
+    /// Set key to hold the string value.
+    ///
+    /// If key already holds a value, it is overwritten, regardless of its type.
+    /// Any previous TTL associated with the key is discarded on successful operation.
+    Set { key: String, value: String },
+    /// Get the value of key.
+    ///
+    /// If the key does not exist the special value `nil` is returned.
+    /// An error is returned if the value stored at `key` is not a string,
+    /// because `GET` only handles string values.
+    Get { key: String },
 }
 
 impl TryFrom<Token> for Command {
@@ -40,6 +51,28 @@ impl TryFrom<Token> for Command {
                                     message: data.clone(),
                                 })
                             }
+                            _ => Err(err),
+                        },
+                        "get" => match tokens.get(1) {
+                            Some(Token::SimpleString { data } | Token::BulkString { data }) => {
+                                Ok(Self::Get { key: data.clone() })
+                            }
+                            _ => Err(err),
+                        },
+                        "set" => match (tokens.get(1), tokens.get(2)) {
+                            (
+                                Some(
+                                    Token::SimpleString { data: key }
+                                    | Token::BulkString { data: key },
+                                ),
+                                Some(
+                                    Token::SimpleString { data: value }
+                                    | Token::BulkString { data: value },
+                                ),
+                            ) => Ok(Self::Set {
+                                key: key.to_string(),
+                                value: value.to_string(),
+                            }),
                             _ => Err(err),
                         },
                         _ => Err(err),
@@ -84,6 +117,18 @@ mod tests {
             command,
             Command::Echo {
                 message: String::from("hey")
+            }
+        )
+    }
+
+    #[test]
+    fn parse_set() {
+        let command = Command::try_from("*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n").unwrap();
+        assert_eq!(
+            command,
+            Command::Set {
+                key: "foo".to_string(),
+                value: "bar".to_string()
             }
         )
     }

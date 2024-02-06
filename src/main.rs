@@ -8,6 +8,11 @@
 mod command;
 mod resp;
 
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
 use command::{Command, PONG_RESPONSE};
 use resp::{SEPARATOR, SIMPLE_STRING_START};
 use tokio::{
@@ -17,18 +22,25 @@ use tokio::{
 
 const LISTEN_ADDR: &str = "127.0.0.1:6379";
 
+type Database = HashMap<String, String>;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(LISTEN_ADDR).await?;
-    let mut threads = vec![];
+    let db = Arc::new(Mutex::new(Database::new()));
+
+    // let mut threads = vec![];
     loop {
         let (mut socket, _) = listener.accept().await?;
-        let thread = tokio::spawn(async move { _ = handle_client(&mut socket).await });
-        threads.push(thread);
+        let db = db.clone();
+        tokio::spawn(async move {
+            handle_client(&mut socket, db).await.unwrap();
+        });
+        // threads.push(handle);
     }
 }
 
-async fn handle_client(stream: &mut TcpStream) -> anyhow::Result<()> {
+async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyhow::Result<()> {
     let mut request = [0; 512];
 
     // `stream.read()` reads until a newline, so lets
@@ -43,15 +55,36 @@ async fn handle_client(stream: &mut TcpStream) -> anyhow::Result<()> {
         // If we actually read something meaningful, respond to it.
         let syntax = String::from_utf8(request.to_vec())?;
         let command = Command::try_from(syntax.as_str())?;
-        _ = match command {
-            Command::Ping => stream.write(PONG_RESPONSE.as_bytes()).await,
+
+        match command {
+            Command::Ping => {
+                _ = stream.write(PONG_RESPONSE.as_bytes()).await.unwrap();
+            }
             Command::Echo { message } => {
-                stream
-                    .write(format!("{SIMPLE_STRING_START}{message}{SEPARATOR}").as_bytes())
+                let response = &format!("{SIMPLE_STRING_START}{message}{SEPARATOR}");
+                _ = stream.write(response.as_bytes()).await.unwrap();
+            }
+            Command::Set { key, value } => {
+                db.lock().unwrap().insert(key, value);
+                let response = &format!("{SIMPLE_STRING_START}OK{SEPARATOR}");
+                _ = stream.write(response.as_bytes()).await.unwrap();
+            }
+            Command::Get { key } => {
+                _ = stream
+                    .write(
+                        format!(
+                            "{SIMPLE_STRING_START}{}{SEPARATOR}",
+                            match db.lock().unwrap().get(&key) {
+                                Some(value) => value,
+                                None => "ERR",
+                            }
+                        )
+                        .as_bytes(),
+                    )
                     .await
+                    .unwrap();
             }
         }
-        .unwrap()
     }
 
     Ok(())
