@@ -18,6 +18,7 @@ impl Value {
         }
     }
 
+    #[allow(dead_code)]
     pub fn without_ttl(data: String) -> Self {
         Self {
             data,
@@ -26,6 +27,7 @@ impl Value {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_ttl(data: String, ttl: time::Duration) -> Self {
         Self {
             data,
