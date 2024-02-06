@@ -26,10 +26,10 @@ const LISTEN_ADDR: &str = "127.0.0.1:6379";
 type Database = HashMap<String, Value>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Value {
-    value: String,
-    ttl: Option<Duration>,
-    created: Instant,
+pub(crate) struct Value {
+    pub(crate) value: String,
+    pub(crate) ttl: Option<Duration>,
+    pub(crate) created: Instant,
 }
 
 #[tokio::main]
