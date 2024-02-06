@@ -1,16 +1,16 @@
 //! # Command interpretation and handling.
 
 use crate::{
+    database::Value,
     resp::{Token, CRLF, SIMPLE_STRING_START},
-    Value,
 };
 use const_format::concatcp;
 use std::{
     io::{Error, ErrorKind},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-pub(crate) const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", CRLF);
+pub const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", CRLF);
 
 /// Known commads that the server can respond to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,14 +87,9 @@ impl TryFrom<Token> for Command {
                                     }
                                     _ => None,
                                 };
-                                let value = Value {
-                                    value: value.to_string(),
-                                    ttl,
-                                    created: Instant::now(),
-                                };
                                 let command = Self::Set {
                                     key: key.to_string(),
-                                    value,
+                                    value: Value::new(value.to_string(), ttl),
                                 };
                                 Ok(command)
                             }
@@ -130,7 +125,7 @@ mod tests {
         let command = "+ping\r\n";
         let syntax = Token::try_from(command).unwrap();
         let command = Command::try_from(syntax).unwrap();
-        assert_eq!(command, Command::Ping)
+        assert_eq!(command, Command::Ping);
     }
 
     #[test]
@@ -143,6 +138,6 @@ mod tests {
             Command::Echo {
                 message: String::from("hey")
             }
-        )
+        );
     }
 }

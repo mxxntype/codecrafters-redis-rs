@@ -6,15 +6,15 @@
 //! [codecrafters.io](https://codecrafters.io) to try the challenge.
 
 mod command;
+mod database;
 mod resp;
 
-use command::{Command, PONG_RESPONSE};
-use resp::{CRLF, SIMPLE_STRING_START};
-use std::sync::Arc;
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
+use crate::{
+    command::{Command, PONG_RESPONSE},
+    database::{Database, Error},
+    resp::{CRLF, SIMPLE_STRING_START},
 };
+use std::sync::Arc;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -23,28 +23,17 @@ use tokio::{
 
 const LISTEN_ADDR: &str = "127.0.0.1:6379";
 
-type Database = HashMap<String, Value>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Value {
-    pub value: String,
-    pub ttl: Option<Duration>,
-    pub created: Instant,
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(LISTEN_ADDR).await?;
     let db = Arc::new(Mutex::new(Database::new()));
 
-    // let mut threads = vec![];
     loop {
         let (mut socket, _) = listener.accept().await?;
         let db = db.clone();
         tokio::spawn(async move {
             handle_client(&mut socket, db).await.unwrap();
         });
-        // threads.push(handle);
     }
 }
 
@@ -75,27 +64,18 @@ async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyh
                     .unwrap();
             }
             Command::Set { key, value } => {
-                db.lock().await.insert(key, value);
+                db.lock().await.set(key, value);
                 let _ = stream
                     .write((format!("{SIMPLE_STRING_START}OK{CRLF}")).as_bytes())
                     .await
                     .unwrap();
             }
             Command::Get { key } => {
-                let requested = Instant::now();
                 let db = db.lock().await;
                 let response: String = match db.get(&key) {
-                    Some(value) => match value.ttl {
-                        Some(ttl) => {
-                            if requested - value.created <= ttl {
-                                format!("+{}", value.value)
-                            } else {
-                                "$-1".to_string()
-                            }
-                        }
-                        None => format!("+{}", value.value),
-                    },
-                    None => "-No such key".into(),
+                    Ok(value) => format!("+{}", value.data),
+                    Err(Error::KeyNotFound) => "-Key not found".to_string(),
+                    Err(Error::Expired) => "$-1".to_string(),
                 };
                 let _ = stream
                     .write(format!("{response}{CRLF}").as_bytes())

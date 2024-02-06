@@ -1,7 +1,7 @@
 //! # Redis serialization protocol (RESP)
 //!
 //! To communicate with the Redis server, Redis clients use a protocol called
-//! REdis Serialization Protocol (RESP). While the protocol was designed specifically
+//! Redis Serialization Protocol (RESP). While the protocol was designed specifically
 //! for Redis, you can use it for other client-server software projects.
 
 use std::io::Error;

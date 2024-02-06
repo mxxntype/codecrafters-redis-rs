@@ -11,6 +11,16 @@ version = "0.1.0"
 authors = ["Codecrafters <hello@codecrafters.io>"]
 edition = "2021"
 
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+enum_glob_use = "deny"
+pedantic = "deny"
+nursery = "deny"
+complexity = "deny"
+perf = "deny"
+
 # DON'T EDIT THIS!
 #
 # Codecrafters relies on this file being intact to run tests successfully. Any changes
