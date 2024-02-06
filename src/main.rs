@@ -11,6 +11,7 @@ mod resp;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 use command::{Command, PONG_RESPONSE};
@@ -22,7 +23,14 @@ use tokio::{
 
 const LISTEN_ADDR: &str = "127.0.0.1:6379";
 
-type Database = HashMap<String, String>;
+type Database = HashMap<String, Value>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Value {
+    value: String,
+    ttl: Option<Duration>,
+    created: Instant,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -58,25 +66,42 @@ async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyh
 
         match command {
             Command::Ping => {
-                _ = stream.write(PONG_RESPONSE.as_bytes()).await.unwrap();
+                let _ = stream.write(PONG_RESPONSE.as_bytes()).await.unwrap();
             }
             Command::Echo { message } => {
-                let response = &format!("{SIMPLE_STRING_START}{message}{SEPARATOR}");
-                _ = stream.write(response.as_bytes()).await.unwrap();
+                let _ = stream
+                    .write((format!("{SIMPLE_STRING_START}{message}{SEPARATOR}")).as_bytes())
+                    .await
+                    .unwrap();
             }
             Command::Set { key, value } => {
                 db.lock().unwrap().insert(key, value);
-                let response = &format!("{SIMPLE_STRING_START}OK{SEPARATOR}");
-                _ = stream.write(response.as_bytes()).await.unwrap();
+                let _ = stream
+                    .write((format!("{SIMPLE_STRING_START}OK{SEPARATOR}")).as_bytes())
+                    .await
+                    .unwrap();
             }
             Command::Get { key } => {
-                _ = stream
+                let requested = Instant::now();
+                let _ = stream
                     .write(
                         format!(
                             "{SIMPLE_STRING_START}{}{SEPARATOR}",
                             match db.lock().unwrap().get(&key) {
-                                Some(value) => value,
-                                None => "ERR",
+                                Some(value) => {
+                                    match value.ttl {
+                                        Some(ttl) => {
+                                            if requested - value.created <= ttl {
+                                                value.value.as_str()
+                                            } else {
+                                                // let _ = db.lock().unwrap().remove(&key);
+                                                "ERR: expired"
+                                            }
+                                        }
+                                        None => value.value.as_str(),
+                                    }
+                                }
+                                None => "ERR: no such key",
                             }
                         )
                         .as_bytes(),

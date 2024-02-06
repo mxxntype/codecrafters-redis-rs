@@ -60,6 +60,7 @@ impl TryFrom<&str> for Token {
     type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let value = value.replace('\0', "");
         let err = Error::new(std::io::ErrorKind::InvalidInput, "Invalid RESP expression");
         let mut substrings = value[1..].split(SEPARATOR);
         match value.chars().next() {

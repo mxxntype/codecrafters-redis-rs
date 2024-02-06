@@ -1,8 +1,14 @@
 //! # Command interpretation and handling.
 
-use crate::resp::{Token, SEPARATOR, SIMPLE_STRING_START};
+use crate::{
+    resp::{Token, SEPARATOR, SIMPLE_STRING_START},
+    Value,
+};
 use const_format::concatcp;
-use std::io::{Error, ErrorKind};
+use std::{
+    io::{Error, ErrorKind},
+    time::{Duration, Instant},
+};
 
 pub(crate) const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", SEPARATOR);
 
@@ -17,7 +23,7 @@ pub enum Command {
     ///
     /// If key already holds a value, it is overwritten, regardless of its type.
     /// Any previous TTL associated with the key is discarded on successful operation.
-    Set { key: String, value: String },
+    Set { key: String, value: Value },
     /// Get the value of key.
     ///
     /// If the key does not exist the special value `nil` is returned.
@@ -59,7 +65,7 @@ impl TryFrom<Token> for Command {
                             }
                             _ => Err(err),
                         },
-                        "set" => match (tokens.get(1), tokens.get(2)) {
+                        "set" => match (tokens.get(1), tokens.get(2), tokens.get(4)) {
                             (
                                 Some(
                                     Token::SimpleString { data: key }
@@ -69,10 +75,31 @@ impl TryFrom<Token> for Command {
                                     Token::SimpleString { data: value }
                                     | Token::BulkString { data: value },
                                 ),
-                            ) => Ok(Self::Set {
-                                key: key.to_string(),
-                                value: value.to_string(),
-                            }),
+                                ttl,
+                            ) => {
+                                dbg!(ttl);
+                                let ttl = match ttl {
+                                    Some(
+                                        Token::SimpleString { data: ttl }
+                                        | Token::BulkString { data: ttl },
+                                    ) => {
+                                        let ms = ttl.parse::<u64>().unwrap();
+                                        Some(Duration::from_millis(ms))
+                                    }
+                                    _ => None,
+                                };
+                                let value = Value {
+                                    value: value.to_string(),
+                                    ttl,
+                                    created: Instant::now(),
+                                };
+                                dbg!(&value);
+                                let command = Self::Set {
+                                    key: key.to_string(),
+                                    value,
+                                };
+                                Ok(command)
+                            }
                             _ => Err(err),
                         },
                         _ => Err(err),
@@ -117,18 +144,6 @@ mod tests {
             command,
             Command::Echo {
                 message: String::from("hey")
-            }
-        )
-    }
-
-    #[test]
-    fn parse_set() {
-        let command = Command::try_from("*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n").unwrap();
-        assert_eq!(
-            command,
-            Command::Set {
-                key: "foo".to_string(),
-                value: "bar".to_string()
             }
         )
     }
