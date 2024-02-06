@@ -93,7 +93,7 @@ async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyh
                                 "$-1".to_string()
                             }
                         }
-                        None => value.value.clone(),
+                        None => format!("+{}", value.value),
                     },
                     None => "-No such key".into(),
                 };
