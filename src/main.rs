@@ -12,7 +12,7 @@ mod resp;
 use crate::{
     command::{Command, PONG_RESPONSE},
     database::{Database, Error},
-    resp::{CRLF, SIMPLE_STRING_START},
+    resp::{Token, CRLF, SIMPLE_STRING_START},
 };
 use std::sync::Arc;
 use tokio::{
@@ -50,8 +50,9 @@ async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyh
         }
 
         // If we actually read something meaningful, respond to it.
-        let syntax = String::from_utf8(request.to_vec())?;
-        let command = Command::try_from(syntax.as_str())?;
+        let string = String::from_utf8(request.to_vec())?;
+        let syntax = Token::try_from(string.as_str())?;
+        let command = Command::try_from(syntax)?;
 
         match command {
             Command::Ping => {

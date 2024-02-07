@@ -4,7 +4,15 @@
 //! Redis Serialization Protocol (RESP). While the protocol was designed specifically
 //! for Redis, you can use it for other client-server software projects.
 
-use std::io::Error;
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ParseError {
+    #[error("Invalid length or count")]
+    InvalidCount,
+    #[error("Incomplete message")]
+    IncompleteMessage,
+    #[error("Unknown data signature")]
+    UnknownSignature,
+}
 
 pub const CRLF: &str = "\r\n";
 pub const SIMPLE_STRING_START: char = '+';
@@ -57,25 +65,30 @@ pub enum Token {
 }
 
 impl TryFrom<&str> for Token {
-    type Error = Error;
+    type Error = ParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let value = value.replace('\0', "");
-        let err = Error::new(std::io::ErrorKind::InvalidInput, "Invalid RESP expression");
         let mut substrings = value[1..].split(CRLF);
         match value.chars().next() {
             Some(SIMPLE_STRING_START) => Ok(Self::SimpleString {
-                data: substrings.nth(0).ok_or(err)?.to_owned(),
+                data: substrings
+                    .nth(0)
+                    .ok_or(ParseError::IncompleteMessage)?
+                    .to_owned(),
             }),
             Some(BULK_STRING_START) => Ok(Self::BulkString {
-                data: substrings.nth(1).ok_or(err)?.to_owned(),
+                data: substrings
+                    .nth(1)
+                    .ok_or(ParseError::IncompleteMessage)?
+                    .to_owned(),
             }),
             Some(ARRAY_START) => {
                 let element_count = substrings
                     .next()
-                    .ok_or(err)?
+                    .ok_or(ParseError::IncompleteMessage)?
                     .parse::<usize>()
-                    .map_err(|_| Error::new(std::io::ErrorKind::InvalidInput, "Invalid length"))?;
+                    .map_err(|_| ParseError::InvalidCount)?;
                 let mut vec = Vec::with_capacity(element_count);
 
                 // TODO: Refactor.
@@ -93,7 +106,7 @@ impl TryFrom<&str> for Token {
                 }
                 Ok(Self::Array { tokens: vec })
             }
-            _ => Err(err),
+            _ => Err(ParseError::UnknownSignature),
         }
     }
 }

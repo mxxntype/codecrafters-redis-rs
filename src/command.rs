@@ -5,12 +5,17 @@ use crate::{
     resp::{Token, CRLF, SIMPLE_STRING_START},
 };
 use const_format::concatcp;
-use std::{
-    io::{Error, ErrorKind},
-    time::Duration,
-};
+use std::time::Duration;
 
 pub const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", CRLF);
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ParseError {
+    #[error("Unknown command")]
+    UknownCommand,
+    #[error("Missing command argument")]
+    MissingArgument,
+}
 
 /// Known commads that the server can respond to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,16 +38,15 @@ pub enum Command {
 }
 
 impl TryFrom<Token> for Command {
-    type Error = Error;
+    type Error = ParseError;
 
     // TODO: Refactor this horrible shit.
     fn try_from(value: Token) -> Result<Self, Self::Error> {
-        let err = Error::new(ErrorKind::InvalidInput, "Unknown or unimplemented command");
         match value {
             Token::SimpleString { data } | Token::BulkString { data } => {
                 match data.to_ascii_lowercase().as_str() {
                     "ping" => Ok(Self::Ping),
-                    _ => Err(err),
+                    _ => Err(ParseError::UknownCommand),
                 }
             }
             Token::Array { tokens } => {
@@ -57,13 +61,13 @@ impl TryFrom<Token> for Command {
                                     message: data.clone(),
                                 })
                             }
-                            _ => Err(err),
+                            _ => Err(ParseError::MissingArgument),
                         },
                         "get" => match tokens.get(1) {
                             Some(Token::SimpleString { data } | Token::BulkString { data }) => {
                                 Ok(Self::Get { key: data.clone() })
                             }
-                            _ => Err(err),
+                            _ => Err(ParseError::MissingArgument),
                         },
                         "set" => match (tokens.get(1), tokens.get(2), tokens.get(4)) {
                             (
@@ -93,24 +97,15 @@ impl TryFrom<Token> for Command {
                                 };
                                 Ok(command)
                             }
-                            _ => Err(err),
+                            _ => Err(ParseError::MissingArgument),
                         },
-                        _ => Err(err),
+                        _ => Err(ParseError::UknownCommand),
                     }
                 } else {
-                    Err(err)
+                    Err(ParseError::MissingArgument)
                 }
             }
         }
-    }
-}
-
-impl TryFrom<&str> for Command {
-    type Error = Error;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let syntax = Token::try_from(value)?;
-        Self::try_from(syntax)
     }
 }
 
