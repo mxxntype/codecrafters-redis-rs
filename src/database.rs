@@ -66,7 +66,7 @@ impl Database {
         }
     }
 
-    pub fn set(&mut self, key: String, value: Value) {
+    pub fn set(&mut self, key: Key, value: Value) {
         let _ = self.storage.insert(key, value);
     }
 }
