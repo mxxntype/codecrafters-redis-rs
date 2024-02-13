@@ -76,22 +76,23 @@ impl Token {
 impl TryFrom<&str> for Token {
     type Error = ParseError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let is_array = value.starts_with(ARRAY_START);
-        let mut iter = value
+    fn try_from(str: &str) -> Result<Self, Self::Error> {
+        let str = str.trim_matches('\0');
+        let is_array = str.starts_with(ARRAY_START);
+        let mut parts = str
             .split(CRLF)
-            .filter(|str| !str.is_empty() && !str.starts_with(ARRAY_START))
+            .filter(|part| !part.is_empty() && !part.starts_with(ARRAY_START))
             .peekable();
 
         let mut tokens: Vec<Self> = vec![];
-        while let Some(str) = iter.next() {
+        while let Some(str) = parts.next() {
             match str.chars().next().ok_or(ParseError::EmptyMessage)? {
                 BULK_STRING_START => {
                     tokens.push(Self::BulkString {
                         // HACK: Clippy suggested some dereference magic for a faster `to_string()`.
-                        data: (*iter.peek().ok_or(ParseError::IncompleteMessage)?).to_string(),
+                        data: (*parts.peek().ok_or(ParseError::IncompleteMessage)?).to_string(),
                     });
-                    iter.next(); // Don't handle the bulk string twice.
+                    parts.next(); // Don't handle the bulk string twice.
                 }
                 SIMPLE_STRING_START => tokens.push(Self::SimpleString {
                     data: str[1..].to_string(),

@@ -44,10 +44,10 @@ pub enum Command {
 impl TryFrom<Token> for Command {
     type Error = ParseError;
 
-    fn try_from(value: Token) -> Result<Self, Self::Error> {
+    fn try_from(tokens: Token) -> Result<Self, Self::Error> {
         use ParseError::{MissingArgument, MissingCommand, UknownCommand, WrongArgument};
         use Token::{Array, BulkString, SimpleString};
-        match value {
+        match tokens {
             SimpleString { data } | BulkString { data } if data == "ping" => Ok(Self::Ping),
             Array { tokens } => {
                 let command = tokens
