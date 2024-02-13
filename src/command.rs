@@ -13,8 +13,12 @@ pub const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", CRLF);
 pub enum ParseError {
     #[error("Unknown command")]
     UknownCommand,
+    #[error("Missing command")]
+    MissingCommand,
     #[error("Missing command argument")]
     MissingArgument,
+    #[error("Wrong command argument")]
+    WrongArgument,
 }
 
 /// Known commads that the server can respond to.
@@ -40,71 +44,46 @@ pub enum Command {
 impl TryFrom<Token> for Command {
     type Error = ParseError;
 
-    // TODO: Refactor this horrible shit.
     fn try_from(value: Token) -> Result<Self, Self::Error> {
+        use ParseError::{MissingArgument, MissingCommand, UknownCommand, WrongArgument};
+        use Token::{Array, BulkString, SimpleString};
         match value {
-            Token::SimpleString { data } | Token::BulkString { data } => {
-                match data.to_ascii_lowercase().as_str() {
-                    "ping" => Ok(Self::Ping),
-                    _ => Err(ParseError::UknownCommand),
-                }
-            }
-            Token::Array { tokens } => {
-                if let Some(Token::SimpleString { data } | Token::BulkString { data }) =
-                    tokens.first()
-                {
-                    match data.to_ascii_lowercase().as_str() {
-                        "ping" => Ok(Self::Ping),
-                        "echo" => match tokens.get(1) {
-                            Some(Token::SimpleString { data } | Token::BulkString { data }) => {
-                                Ok(Self::Echo {
-                                    message: data.clone(),
-                                })
-                            }
-                            _ => Err(ParseError::MissingArgument),
-                        },
-                        "get" => match tokens.get(1) {
-                            Some(Token::SimpleString { data } | Token::BulkString { data }) => {
-                                Ok(Self::Get { key: data.clone() })
-                            }
-                            _ => Err(ParseError::MissingArgument),
-                        },
-                        "set" => match (tokens.get(1), tokens.get(2), tokens.get(4)) {
-                            (
-                                Some(
-                                    Token::SimpleString { data: key }
-                                    | Token::BulkString { data: key },
-                                ),
-                                Some(
-                                    Token::SimpleString { data: value }
-                                    | Token::BulkString { data: value },
-                                ),
-                                ttl,
-                            ) => {
-                                let ttl = match ttl {
-                                    Some(
-                                        Token::SimpleString { data: ttl }
-                                        | Token::BulkString { data: ttl },
-                                    ) => {
-                                        let ms = ttl.parse::<u64>().unwrap();
-                                        Some(Duration::from_millis(ms))
-                                    }
-                                    _ => None,
-                                };
-                                let command = Self::Set {
-                                    key: key.to_string(),
-                                    value: Value::new(value.to_string(), ttl),
-                                };
-                                Ok(command)
-                            }
-                            _ => Err(ParseError::MissingArgument),
-                        },
-                        _ => Err(ParseError::UknownCommand),
+            SimpleString { data } | BulkString { data } if data == "ping" => Ok(Self::Ping),
+            Array { tokens } => {
+                let command = tokens
+                    .first()
+                    .ok_or(MissingCommand)?
+                    .extract()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                let arg_1 = tokens.get(1).ok_or(MissingArgument).map(Token::extract);
+                let arg_2 = tokens.get(2).ok_or(MissingArgument).map(Token::extract);
+                let arg_3 = tokens.get(4).and_then(Token::extract);
+                match (command.as_str(), arg_1, arg_2, arg_3) {
+                    ("ping", _, _, _) => Ok(Self::Ping),
+                    ("echo", msg, _, _) => Ok(Self::Echo {
+                        message: msg?.ok_or(WrongArgument)?.to_string(),
+                    }),
+                    ("get", key, _, _) => Ok(Self::Get {
+                        key: key?.ok_or(WrongArgument)?.to_string(),
+                    }),
+                    ("set", key, val, ttl) => {
+                        let ttl = ttl.map(|ttl| {
+                            let ms = ttl.parse::<u64>().ok();
+                            ms.map(Duration::from_millis)
+                        });
+                        Ok(Self::Set {
+                            key: key?.ok_or(WrongArgument)?.to_string(),
+                            value: Value::new(
+                                val?.ok_or(WrongArgument)?.to_string(),
+                                ttl.flatten(),
+                            ),
+                        })
                     }
-                } else {
-                    Err(ParseError::MissingArgument)
+                    _ => Err(UknownCommand),
                 }
             }
+            _ => Err(UknownCommand),
         }
     }
 }
@@ -112,7 +91,7 @@ impl TryFrom<Token> for Command {
 #[cfg(test)]
 mod tests {
     use super::Command;
-    use crate::resp::Token;
+    use crate::{database::Value, resp::Token};
 
     #[test]
     fn parse_ping() {
@@ -129,6 +108,31 @@ mod tests {
             command,
             Command::Echo {
                 message: String::from("hey")
+            }
+        );
+    }
+
+    #[test]
+    fn parse_get() {
+        let tokens = Token::try_from("*2\r\n$4\r\nGET\r\n$3\r\nfoo\r\n").unwrap();
+        let command = Command::try_from(tokens).unwrap();
+        assert_eq!(
+            command,
+            Command::Get {
+                key: "foo".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_set() {
+        let tokens = Token::try_from("*3\r\n$4\r\nSET\r\n$3\r\nfoo\r\n+bar\r\n").unwrap();
+        let command = Command::try_from(tokens).unwrap();
+        assert_eq!(
+            command,
+            Command::Set {
+                key: "foo".to_string(),
+                value: Value::without_ttl("bar".to_string())
             }
         );
     }

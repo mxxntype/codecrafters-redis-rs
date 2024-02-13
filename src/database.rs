@@ -2,11 +2,18 @@ use std::{collections::HashMap, time};
 
 pub type Key = String;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Value {
     pub data: String,
     ttl: Option<time::Duration>,
     created: time::Instant,
+}
+
+impl Eq for Value {}
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+    }
 }
 
 impl Value {

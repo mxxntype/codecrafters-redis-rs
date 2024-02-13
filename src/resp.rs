@@ -63,6 +63,16 @@ pub enum Token {
     Array { tokens: Vec<Token> },
 }
 
+impl Token {
+    pub fn extract(&self) -> Option<&str> {
+        use Token::{Array, BulkString, SimpleString};
+        match self {
+            SimpleString { data } | BulkString { data } => Some(data),
+            Array { .. } => None,
+        }
+    }
+}
+
 impl TryFrom<&str> for Token {
     type Error = ParseError;
 
