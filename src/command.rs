@@ -111,23 +111,20 @@ impl TryFrom<Token> for Command {
 
 #[cfg(test)]
 mod tests {
-    use crate::resp::Token;
-
     use super::Command;
+    use crate::resp::Token;
 
     #[test]
     fn parse_ping() {
-        let command = "+ping\r\n";
-        let syntax = Token::try_from(command).unwrap();
-        let command = Command::try_from(syntax).unwrap();
+        let tokens = Token::try_from("+ping\r\n").unwrap();
+        let command = Command::try_from(tokens).unwrap();
         assert_eq!(command, Command::Ping);
     }
 
     #[test]
     fn parse_echo() {
-        let command = "*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n";
-        let syntax = Token::try_from(command).unwrap();
-        let command = Command::try_from(syntax).unwrap();
+        let tokens = Token::try_from("*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n").unwrap();
+        let command = Command::try_from(tokens).unwrap();
         assert_eq!(
             command,
             Command::Echo {

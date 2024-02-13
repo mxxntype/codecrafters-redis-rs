@@ -104,10 +104,9 @@ mod tests {
 
     #[test]
     fn simple_string_pong() {
-        let command = "+PONG\r\n";
-        let datatype = Token::try_from(command).unwrap();
+        let token = Token::try_from("+PONG\r\n").unwrap();
         assert_eq!(
-            datatype,
+            token,
             Token::SimpleString {
                 data: String::from("PONG")
             }
@@ -116,8 +115,7 @@ mod tests {
 
     #[test]
     fn simple_string_ok() {
-        let command = "+OK\r\n";
-        let token = Token::try_from(command).unwrap();
+        let token = Token::try_from("+OK\r\n").unwrap();
         assert_eq!(
             token,
             Token::SimpleString {
@@ -128,10 +126,9 @@ mod tests {
 
     #[test]
     fn bulk_string_hello() {
-        let command = "$5\r\nhello\r\n";
-        let bulk_string = Token::try_from(command).unwrap();
+        let token = Token::try_from("$5\r\nhello\r\n").unwrap();
         assert_eq!(
-            bulk_string,
+            token,
             Token::BulkString {
                 data: String::from("hello")
             }
@@ -140,10 +137,9 @@ mod tests {
 
     #[test]
     fn bulk_string_array() {
-        let command = "*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n";
-        let array = Token::try_from(command).unwrap();
+        let token = Token::try_from("*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n").unwrap();
         assert_eq!(
-            array,
+            token,
             Token::Array {
                 tokens: vec![
                     Token::BulkString {
@@ -159,10 +155,9 @@ mod tests {
 
     #[test]
     fn mixed_string_array() {
-        let command = "*2\r\n$4\r\nECHO\r\n+hey\r\n";
-        let array = Token::try_from(command).unwrap();
+        let token = Token::try_from("*2\r\n$4\r\nECHO\r\n+hey\r\n").unwrap();
         assert_eq!(
-            array,
+            token,
             Token::Array {
                 tokens: vec![
                     Token::BulkString {
@@ -178,10 +173,9 @@ mod tests {
 
     #[test]
     fn sinle_element_array() {
-        let command = "*1\r\n$4\r\nECHO\r\n";
-        let array = Token::try_from(command).unwrap();
+        let token = Token::try_from("*1\r\n$4\r\nECHO\r\n").unwrap();
         assert_eq!(
-            array,
+            token,
             Token::Array {
                 tokens: vec![Token::BulkString {
                     data: String::from("ECHO")
