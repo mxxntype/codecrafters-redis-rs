@@ -78,7 +78,7 @@ impl TryFrom<&str> for Token {
             match str.chars().next().ok_or(ParseError::EmptyMessage)? {
                 BULK_STRING_START => {
                     tokens.push(Self::BulkString {
-                        // NOTE: Clippy suggested some fucking dark magic for a faster `to_string()`.
+                        // HACK: Clippy suggested some dereference magic for a faster `to_string()`.
                         data: (*iter.peek().ok_or(ParseError::IncompleteMessage)?).to_string(),
                     });
                     iter.next(); // Don't handle the bulk string twice.
