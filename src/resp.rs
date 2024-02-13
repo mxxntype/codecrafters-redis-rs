@@ -104,6 +104,7 @@ impl TryFrom<&str> for Token {
             (0, _) => Err(ParseError::EmptyMessage),
             (1.., true) => Ok(Self::Array { tokens }),
             (1.., false) => Ok(tokens.first().expect("").clone()),
+            (_, _) => unreachable!(),
         }
     }
 }
