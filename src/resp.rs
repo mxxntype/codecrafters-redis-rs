@@ -1,17 +1,16 @@
-//! # Redis serialization protocol (RESP)
-//!
+//! # Redis serialization protocol (RESP) //!
 //! To communicate with the Redis server, Redis clients use a protocol called
 //! Redis Serialization Protocol (RESP). While the protocol was designed specifically
 //! for Redis, you can use it for other client-server software projects.
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParseError {
-    #[error("Invalid length or count")]
-    InvalidCount,
+    #[error("Empty message")]
+    EmptyMessage,
     #[error("Incomplete message")]
     IncompleteMessage,
-    #[error("Unknown data signature")]
-    UnknownSignature,
+    #[error("Unknown type")]
+    UnknownType,
 }
 
 pub const CRLF: &str = "\r\n";
@@ -68,45 +67,33 @@ impl TryFrom<&str> for Token {
     type Error = ParseError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let value = value.replace('\0', "");
-        let mut substrings = value[1..].split(CRLF);
-        match value.chars().next() {
-            Some(SIMPLE_STRING_START) => Ok(Self::SimpleString {
-                data: substrings
-                    .nth(0)
-                    .ok_or(ParseError::IncompleteMessage)?
-                    .to_owned(),
-            }),
-            Some(BULK_STRING_START) => Ok(Self::BulkString {
-                data: substrings
-                    .nth(1)
-                    .ok_or(ParseError::IncompleteMessage)?
-                    .to_owned(),
-            }),
-            Some(ARRAY_START) => {
-                let element_count = substrings
-                    .next()
-                    .ok_or(ParseError::IncompleteMessage)?
-                    .parse::<usize>()
-                    .map_err(|_| ParseError::InvalidCount)?;
-                let mut vec = Vec::with_capacity(element_count);
+        let is_array = value.starts_with(ARRAY_START);
+        let mut iter = value
+            .split(CRLF)
+            .filter(|str| !str.is_empty() && !str.starts_with(ARRAY_START))
+            .peekable();
 
-                // TODO: Refactor.
-                for str in substrings.filter(|str| !str.is_empty()) {
-                    match str.chars().next() {
-                        Some(SIMPLE_STRING_START) => vec.push(Self::SimpleString {
-                            data: str[1..].to_owned(),
-                        }),
-                        Some(BULK_STRING_START) => continue,
-                        Some(_) => vec.push(Self::BulkString {
-                            data: str.to_owned(),
-                        }),
-                        _ => {}
-                    }
+        let mut tokens: Vec<Self> = vec![];
+        while let Some(str) = iter.next() {
+            match str.chars().next().ok_or(ParseError::EmptyMessage)? {
+                BULK_STRING_START => {
+                    tokens.push(Self::BulkString {
+                        // NOTE: Clippy suggested some fucking dark magic for a faster `to_string()`.
+                        data: (*iter.peek().ok_or(ParseError::IncompleteMessage)?).to_string(),
+                    });
+                    iter.next(); // Don't handle the bulk string twice.
                 }
-                Ok(Self::Array { tokens: vec })
+                SIMPLE_STRING_START => tokens.push(Self::SimpleString {
+                    data: str[1..].to_string(),
+                }),
+                _ => return Err(ParseError::UnknownType),
             }
-            _ => Err(ParseError::UnknownSignature),
+        }
+
+        match (tokens.len(), is_array) {
+            (0, _) => Err(ParseError::EmptyMessage),
+            (1.., true) => Ok(Self::Array { tokens }),
+            (1.., false) => Ok(tokens.first().expect("").clone()),
         }
     }
 }
@@ -185,6 +172,20 @@ mod tests {
                         data: String::from("hey")
                     }
                 ]
+            }
+        );
+    }
+
+    #[test]
+    fn sinle_element_array() {
+        let command = "*1\r\n$4\r\nECHO\r\n";
+        let array = Token::try_from(command).unwrap();
+        assert_eq!(
+            array,
+            Token::Array {
+                tokens: vec![Token::BulkString {
+                    data: String::from("ECHO")
+                },]
             }
         );
     }
