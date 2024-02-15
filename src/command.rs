@@ -26,7 +26,7 @@ pub enum ParseError {
 pub enum Command {
     /// The server should reply with [`PONG_RESPONSE`].
     Ping,
-    /// The server should repeat the [`message`].
+    /// The server should repeat the `message`.
     Echo { message: String },
     /// Set key to hold the string value.
     ///
