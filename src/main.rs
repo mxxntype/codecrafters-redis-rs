@@ -20,23 +20,32 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,
 };
+use tracing::{instrument, Level};
+use tracing_subscriber::fmt;
 
 const LISTEN_ADDR: &str = "127.0.0.1:6379";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    setup();
+
     let listener = TcpListener::bind(LISTEN_ADDR).await?;
     let db = Arc::new(Mutex::new(Database::new()));
 
     loop {
-        let (mut socket, _) = listener.accept().await?;
+        let (mut socket, addr) = listener.accept().await?;
+        tracing::info!("Accepted a connection from {}", addr);
         let db = db.clone();
         tokio::spawn(async move {
-            handle_client(&mut socket, db).await.unwrap();
+            let _ = handle_client(&mut socket, db)
+                .await
+                .map_err(|err| tracing::error!("Error handling client: {err}"));
+            tracing::info!("{} closed the connection", addr);
         });
     }
 }
 
+#[instrument(skip(stream, db))]
 async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyhow::Result<()> {
     let mut request = [0; 512];
 
@@ -46,6 +55,7 @@ async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyh
         // Having nothing to read is not an error, it's an Ok(0).
         // Without this, the loop will run until an error occurs.
         if read_bytes == 0 {
+            tracing::trace!("Stream read finished");
             break;
         }
 
@@ -53,6 +63,7 @@ async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyh
         let string = String::from_utf8(request.to_vec())?;
         let syntax = Token::try_from(string.as_str())?;
         let command = Command::try_from(syntax)?;
+        tracing::debug!("Command = {command:?}");
 
         match command {
             Command::Ping => {
@@ -87,4 +98,12 @@ async fn handle_client(stream: &mut TcpStream, db: Arc<Mutex<Database>>) -> anyh
     }
 
     Ok(())
+}
+
+fn setup() {
+    let _ = color_eyre::install();
+    fmt::Subscriber::builder()
+        .with_max_level(Level::TRACE)
+        .init();
+    tracing::trace!("Setup hook finished");
 }

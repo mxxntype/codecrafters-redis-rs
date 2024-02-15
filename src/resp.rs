@@ -5,12 +5,10 @@
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParseError {
-    #[error("Empty message")]
-    EmptyMessage,
-    #[error("Incomplete message")]
+    #[error("Incomplete RESP message")]
     IncompleteMessage,
-    #[error("Unknown type")]
-    UnknownType,
+    #[error("Unknown RESP type: {0:?}")]
+    UnknownType(char),
 }
 
 pub const CRLF: &str = "\r\n";
@@ -86,7 +84,7 @@ impl TryFrom<&str> for Token {
 
         let mut tokens: Vec<Self> = vec![];
         while let Some(str) = parts.next() {
-            match str.chars().next().ok_or(ParseError::EmptyMessage)? {
+            match str.chars().next().ok_or(ParseError::IncompleteMessage)? {
                 BULK_STRING_START => {
                     tokens.push(Self::BulkString {
                         // HACK: Clippy suggested some dereference magic for a faster `to_string()`.
@@ -97,13 +95,12 @@ impl TryFrom<&str> for Token {
                 SIMPLE_STRING_START => tokens.push(Self::SimpleString {
                     data: str[1..].to_string(),
                 }),
-                _ => return Err(ParseError::UnknownType),
+                unknown_type => return Err(ParseError::UnknownType(unknown_type)),
             }
         }
 
         match (tokens.len(), is_array) {
-            (0, _) => Err(ParseError::EmptyMessage),
-            (1.., true) => Ok(Self::Array { tokens }),
+            (1.., true) | (0, _) => Ok(Self::Array { tokens }),
             (1.., false) => Ok(tokens.first().expect("").clone()),
             (_, _) => unreachable!(),
         }

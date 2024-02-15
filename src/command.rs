@@ -11,8 +11,8 @@ pub const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", CRLF);
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParseError {
-    #[error("Unknown command")]
-    UknownCommand,
+    #[error("Unknown command: {0}")]
+    UnknownCommand(String),
     #[error("Missing command")]
     MissingCommand,
     #[error("Missing command argument")]
@@ -21,7 +21,7 @@ pub enum ParseError {
     WrongArgument,
 }
 
-/// Known commads that the server can respond to.
+/// Known commands that the server can respond to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// The server should reply with [`PONG_RESPONSE`].
@@ -45,10 +45,13 @@ impl TryFrom<Token> for Command {
     type Error = ParseError;
 
     fn try_from(tokens: Token) -> Result<Self, Self::Error> {
-        use ParseError::{MissingArgument, MissingCommand, UknownCommand, WrongArgument};
+        use ParseError::{MissingArgument, MissingCommand, UnknownCommand, WrongArgument};
         use Token::{Array, BulkString, SimpleString};
         match tokens {
-            SimpleString { data } | BulkString { data } if data == "ping" => Ok(Self::Ping),
+            SimpleString { data } | BulkString { data } => match data.as_str() {
+                "ping" => Ok(Self::Ping),
+                _ => Err(UnknownCommand(data)),
+            },
             Array { tokens } => {
                 let command = tokens
                     .first()
@@ -80,10 +83,9 @@ impl TryFrom<Token> for Command {
                             ),
                         })
                     }
-                    _ => Err(UknownCommand),
+                    _ => Err(UnknownCommand(command)),
                 }
             }
-            _ => Err(UknownCommand),
         }
     }
 }
