@@ -28,13 +28,15 @@ impl Server {
     ///
     /// This function runs indefinetely.
     #[instrument(name = "server", skip(self))]
-    pub async fn run(&self) -> anyhow::Result<()> {
+    pub async fn run(&'static self) -> anyhow::Result<()> {
         loop {
             let (mut socket, _) = self.listener.accept().await?;
-            match self.handle_client(&mut socket).await {
-                Ok(_) => {}
-                Err(err) => tracing::error!("{err}"),
-            }
+            tokio::spawn(async move {
+                match self.handle_client(&mut socket).await {
+                    Ok(_) => {}
+                    Err(err) => tracing::error!("{err}"),
+                }
+            });
         }
     }
 

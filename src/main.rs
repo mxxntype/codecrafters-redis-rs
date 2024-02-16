@@ -10,15 +10,25 @@ mod database;
 mod resp;
 mod server;
 
+use async_once::AsyncOnce;
+use lazy_static::lazy_static;
 use server::Server;
 use tracing::Level;
 use tracing_subscriber::fmt;
+
+lazy_static! {
+    static ref SERVER: AsyncOnce<Server> = AsyncOnce::new(async {
+        Server::new()
+            .await
+            .expect("Could not construct a server instance")
+    });
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     setup();
 
-    let server = Server::new().await?;
+    let server = SERVER.get().await;
     server.run().await?;
 
     Ok(())
