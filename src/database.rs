@@ -1,9 +1,13 @@
+//! # Redis database, holds [`Key`]-[`Value`] pairs along with associated data like TTLs.
+
 use derivative::Derivative;
 use std::{collections::HashMap, time};
 use tracing::instrument;
 
+/// The identifier of a [`Value`] inside the [`Database`].
 pub type Key = String;
 
+/// The value that is associated with a [`Key`] inside the [`Database`].
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Value {
@@ -21,6 +25,7 @@ impl PartialEq for Value {
 }
 
 impl Value {
+    /// Create a new [`Value`] with an optional TTL.
     pub fn new(data: String, ttl: Option<time::Duration>) -> Self {
         Self {
             data,
@@ -29,6 +34,7 @@ impl Value {
         }
     }
 
+    /// Create a new [`Value`] with no TTL.
     #[allow(dead_code)]
     pub fn without_ttl(data: String) -> Self {
         Self {
@@ -38,6 +44,7 @@ impl Value {
         }
     }
 
+    /// Create a new [`Value`] with a known TTL.
     #[allow(dead_code)]
     pub fn with_ttl(data: String, ttl: time::Duration) -> Self {
         Self {
@@ -48,6 +55,7 @@ impl Value {
     }
 }
 
+/// Possible errors that can arise while looking up a [`Key`] in the [`Database`].
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     #[error("No value is associated with such key")]
@@ -56,6 +64,7 @@ pub enum Error {
     Expired,
 }
 
+/// The Redis database. Owns a [`HashMap`] with [`Key`] - [`Value`] pairs.
 #[derive(Debug, Clone)]
 pub struct Database {
     storage: HashMap<Key, Value>,

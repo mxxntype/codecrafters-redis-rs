@@ -1,12 +1,10 @@
-//! # Command interpretation and handling.
+//! # Redis commands, their interpretation and handling.
 
 use crate::database::Value;
-use crate::resp::{Token, CRLF, SIMPLE_STRING_START};
-use const_format::concatcp;
+use crate::resp::Token;
 use std::time::Duration;
 
-pub const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", CRLF);
-
+/// Possible errors that can arise during [`Token`] to [`Command`] translation.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParseError {
     #[error("Unknown command: {0:?}")]

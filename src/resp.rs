@@ -1,8 +1,10 @@
-//! # Redis serialization protocol (RESP) //!
+//! # Redis serialization protocol (RESP)
+//!
 //! To communicate with the Redis server, Redis clients use a protocol called
 //! Redis Serialization Protocol (RESP). While the protocol was designed specifically
 //! for Redis, you can use it for other client-server software projects.
 
+/// Possible errors that can arise during [`&str`] to [`Token`] translation.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParseError {
     #[error("Incomplete RESP message")]
@@ -16,6 +18,7 @@ pub const SIMPLE_STRING_START: char = '+';
 pub const BULK_STRING_START: char = '$';
 pub const ARRAY_START: char = '*';
 
+/// Known RESP tokens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     /// RESP Simple strings are encoded as a plus (`+`) character,
@@ -62,6 +65,7 @@ pub enum Token {
 }
 
 impl Token {
+    /// Get a slice of the contained [`String`], if any.
     pub fn extract(&self) -> Option<&str> {
         use Token::{Array, BulkString, SimpleString};
         match self {
