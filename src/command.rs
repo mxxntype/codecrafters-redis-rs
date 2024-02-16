@@ -1,9 +1,7 @@
 //! # Command interpretation and handling.
 
-use crate::{
-    database::Value,
-    resp::{Token, CRLF, SIMPLE_STRING_START},
-};
+use crate::database::Value;
+use crate::resp::{Token, CRLF, SIMPLE_STRING_START};
 use const_format::concatcp;
 use std::time::Duration;
 
@@ -11,7 +9,7 @@ pub const PONG_RESPONSE: &str = concatcp!(SIMPLE_STRING_START, "PONG", CRLF);
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParseError {
-    #[error("Unknown command: {0}")]
+    #[error("Unknown command: {0:?}")]
     UnknownCommand(String),
     #[error("Missing command")]
     MissingCommand,

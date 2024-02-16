@@ -1,11 +1,15 @@
+use derivative::Derivative;
 use std::{collections::HashMap, time};
+use tracing::instrument;
 
 pub type Key = String;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct Value {
     pub data: String,
     ttl: Option<time::Duration>,
+    #[derivative(Debug = "ignore")]
     created: time::Instant,
 }
 
@@ -64,15 +68,26 @@ impl Database {
         }
     }
 
+    #[instrument(name = "db_get", skip(self))]
     pub fn get(&self, key: &str) -> Result<&Value, Error> {
         let now = time::Instant::now();
-        let value = self.storage.get(key).ok_or(Error::KeyNotFound)?;
+        let value = self.storage.get(key).ok_or_else(|| {
+            tracing::error!("No such key found");
+            Error::KeyNotFound
+        })?;
         match value.ttl {
-            Some(ttl) if now.duration_since(value.created) > ttl => Err(Error::Expired),
-            _ => Ok(value),
+            Some(ttl) if now.duration_since(value.created) > ttl => {
+                tracing::error!("TTL expired");
+                Err(Error::Expired)
+            }
+            _ => {
+                tracing::debug!("Valid key found");
+                Ok(value)
+            }
         }
     }
 
+    #[instrument(name = "db_set", skip(self))]
     pub fn set(&mut self, key: Key, value: Value) {
         let _ = self.storage.insert(key, value);
     }
