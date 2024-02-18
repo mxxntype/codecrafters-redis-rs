@@ -1,6 +1,7 @@
 //! # Redis server, handles clients and interacts with the [`Database`].
 
-use crate::command::Command;
+use crate::command::{self, Command};
+use crate::config::Config;
 use crate::database::{Database, Error};
 use crate::resp::{Token, CRLF, SIMPLE_STRING_START};
 use std::convert::Infallible;
@@ -20,14 +21,16 @@ pub const LISTEN_ADDR: &str = "127.0.0.1:6379";
 pub struct Server {
     pub db: Arc<Mutex<Database>>,
     listener: TcpListener,
+    config: Config,
 }
 
 impl Server {
     /// Construct a new [`Server`].
-    pub async fn new() -> io::Result<Self> {
+    pub async fn new(config: Config) -> io::Result<Self> {
         Ok(Self {
             db: Arc::new(Mutex::new(Database::new())),
             listener: TcpListener::bind(LISTEN_ADDR).await?,
+            config,
         })
     }
 
@@ -51,23 +54,23 @@ impl Server {
 
     /// Execute a [`Command`] on the contained [`Database`].
     #[instrument(skip(self, stream))]
-    async fn exec(&self, command: Command, stream: &mut TcpStream) {
-        let result = match command {
+    async fn exec(&self, command: Command, stream: &mut TcpStream) -> anyhow::Result<()> {
+        match command {
             Command::Ping => {
-                stream
+                let _ = stream
                     .write(format!("{SIMPLE_STRING_START}PONG{CRLF}").as_bytes())
-                    .await
+                    .await?;
             }
             Command::Echo { message } => {
-                stream
+                let _ = stream
                     .write((format!("{SIMPLE_STRING_START}{message}{CRLF}")).as_bytes())
-                    .await
+                    .await?;
             }
             Command::Set { key, value } => {
                 self.db.lock().await.set(key, value);
-                stream
+                let _ = stream
                     .write((format!("{SIMPLE_STRING_START}OK{CRLF}")).as_bytes())
-                    .await
+                    .await?;
             }
             Command::Get { key } => {
                 let db = self.db.lock().await;
@@ -76,14 +79,26 @@ impl Server {
                     Err(Error::KeyNotFound) => "-Key not found".to_string(),
                     Err(Error::Expired) => "$-1".to_string(),
                 };
-                stream.write(format!("{response}{CRLF}").as_bytes()).await
+                let _ = stream.write(format!("{response}{CRLF}").as_bytes()).await?;
             }
-        };
-
-        match result {
-            Ok(n) => tracing::trace!("Responded with {n} bytes"),
-            Err(err) => tracing::error!("Error: {err}"),
+            Command::ConfigGet { key } => {
+                let response = Token::Array {
+                    tokens: vec![
+                        Token::BulkString { data: key.clone() },
+                        Token::BulkString {
+                            data: match key.as_str() {
+                                "dir" => self.config.dir.to_string_lossy().to_string(),
+                                "filename" => self.config.filename.to_string_lossy().to_string(),
+                                _ => return Err(command::ParseError::MissingArgument.into()),
+                            },
+                        },
+                    ],
+                };
+                let _ = stream.write(response.to_string().as_bytes()).await?;
+            }
         }
+
+        Ok(())
     }
 
     /// Interpret and handle RESP-encoded commands from `stream`.
@@ -109,7 +124,7 @@ impl Server {
             let syntax = Token::try_from(string.as_str())?;
             let command = Command::try_from(syntax)?;
 
-            self.exec(command, stream).await;
+            self.exec(command, stream).await?;
         }
 
         Ok(())

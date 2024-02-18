@@ -8,19 +8,22 @@
 //! [codecrafters.io](https://codecrafters.io) to try the challenge.
 
 mod command;
+mod config;
 mod database;
 mod resp;
 mod server;
 
 use async_once::AsyncOnce;
+use config::Config;
 use lazy_static::lazy_static;
 use server::Server;
+use structopt::StructOpt;
 use tracing::Level;
 use tracing_subscriber::fmt;
 
 lazy_static! {
     static ref SERVER: AsyncOnce<Server> = AsyncOnce::new(async {
-        Server::new()
+        Server::new(Config::from_args())
             .await
             .expect("Could not construct a server instance")
     });

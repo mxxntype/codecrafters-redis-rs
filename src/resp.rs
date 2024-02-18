@@ -4,6 +4,8 @@
 //! Redis Serialization Protocol (RESP). While the protocol was designed specifically
 //! for Redis, you can use it for other client-server software projects.
 
+use std::fmt::{self, Display, Formatter};
+
 /// Possible errors that can arise during [`&str`] to [`Token`] translation.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ParseError {
@@ -111,89 +113,117 @@ impl TryFrom<&str> for Token {
     }
 }
 
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Token::SimpleString { data } => write!(f, "+{data}{CRLF}")?,
+            Token::BulkString { data } => write!(f, "${len}{CRLF}{data}{CRLF}", len = data.len())?,
+            Token::Array { tokens } => {
+                write!(f, "*{count}{CRLF}", count = tokens.len())?;
+                for token in tokens.iter() {
+                    write!(f, "{token}")?;
+                }
+            }
+        };
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Token;
+    use super::Token::{self, Array, BulkString, SimpleString};
 
     #[test]
     fn simple_string_pong() {
-        let token = Token::try_from("+PONG\r\n").unwrap();
+        const RESP: &str = "+PONG\r\n";
+        let token = Token::try_from(RESP).unwrap();
         assert_eq!(
             token,
-            Token::SimpleString {
+            SimpleString {
                 data: String::from("PONG")
             }
         );
+        assert_eq!(token.to_string(), RESP);
     }
 
     #[test]
     fn simple_string_ok() {
-        let token = Token::try_from("+OK\r\n").unwrap();
+        const RESP: &str = "+OK\r\n";
+        let token = Token::try_from(RESP).unwrap();
         assert_eq!(
             token,
-            Token::SimpleString {
+            SimpleString {
                 data: String::from("OK")
             }
         );
+        assert_eq!(token.to_string(), RESP);
     }
 
     #[test]
     fn bulk_string_hello() {
-        let token = Token::try_from("$5\r\nhello\r\n").unwrap();
+        const RESP: &str = "$5\r\nhello\r\n";
+        let token = Token::try_from(RESP).unwrap();
         assert_eq!(
             token,
-            Token::BulkString {
+            BulkString {
                 data: String::from("hello")
             }
         );
+        assert_eq!(token.to_string(), RESP);
     }
 
     #[test]
     fn bulk_string_array() {
-        let token = Token::try_from("*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n").unwrap();
+        const RESP: &str = "*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n";
+        let token = Token::try_from(RESP).unwrap();
         assert_eq!(
             token,
-            Token::Array {
+            Array {
                 tokens: vec![
-                    Token::BulkString {
+                    BulkString {
                         data: String::from("ECHO")
                     },
-                    Token::BulkString {
+                    BulkString {
                         data: String::from("hey")
                     }
                 ]
             }
         );
+        assert_eq!(token.to_string(), RESP);
     }
 
     #[test]
     fn mixed_string_array() {
-        let token = Token::try_from("*2\r\n$4\r\nECHO\r\n+hey\r\n").unwrap();
+        const RESP: &str = "*2\r\n$4\r\nECHO\r\n+hey\r\n";
+        let token = Token::try_from(RESP).unwrap();
         assert_eq!(
             token,
-            Token::Array {
+            Array {
                 tokens: vec![
-                    Token::BulkString {
+                    BulkString {
                         data: String::from("ECHO")
                     },
-                    Token::SimpleString {
+                    SimpleString {
                         data: String::from("hey")
                     }
                 ]
             }
         );
+        assert_eq!(token.to_string(), RESP);
     }
 
     #[test]
     fn sinle_element_array() {
-        let token = Token::try_from("*1\r\n$4\r\nECHO\r\n").unwrap();
+        const RESP: &str = "*1\r\n$4\r\nECHO\r\n";
+        let token = Token::try_from(RESP).unwrap();
         assert_eq!(
             token,
-            Token::Array {
-                tokens: vec![Token::BulkString {
+            Array {
+                tokens: vec![BulkString {
                     data: String::from("ECHO")
-                },]
+                }]
             }
         );
+        assert_eq!(token.to_string(), RESP);
     }
 }

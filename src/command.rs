@@ -35,6 +35,13 @@ pub enum Command {
     /// An error is returned if the value stored at `key` is not a string,
     /// because `GET` only handles string values.
     Get { key: String },
+    /// The `CONFIG GET` command is used to read the configuration of a Redis server.
+    ///
+    /// The symmetric command used to alter the configuration at run time is
+    /// `CONFIG SET`. `CONFIG GET` takes multiple arguments, which are glob-style
+    /// patterns. Any configuration parameter matching any of the patterns are
+    /// reported as a list of key-value pairs.
+    ConfigGet { key: String },
 }
 
 impl TryFrom<Token> for Command {
@@ -79,6 +86,9 @@ impl TryFrom<Token> for Command {
                             ),
                         })
                     }
+                    ("config", Ok(Some("get")), key, _) => Ok(Self::ConfigGet {
+                        key: key?.ok_or(MissingArgument)?.to_string(),
+                    }),
                     _ => Err(UnknownCommand(command)),
                 }
             }
