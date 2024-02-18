@@ -88,7 +88,7 @@ impl Server {
                         Token::BulkString {
                             data: match key.as_str() {
                                 "dir" => self.config.dir.to_string_lossy().to_string(),
-                                "filename" => self.config.filename.to_string_lossy().to_string(),
+                                "filename" => self.config.dbfilename.to_string_lossy().to_string(),
                                 _ => return Err(command::ParseError::MissingArgument.into()),
                             },
                         },

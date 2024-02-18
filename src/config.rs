@@ -19,5 +19,5 @@ pub struct Config {
     pub(crate) dir: PathBuf,
     /// The name of the RDB file.
     #[structopt(long, default_value = DEFAULT_FILE, parse(from_os_str))]
-    pub(crate) filename: PathBuf,
+    pub(crate) dbfilename: PathBuf,
 }
